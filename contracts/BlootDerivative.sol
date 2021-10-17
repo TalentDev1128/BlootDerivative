@@ -5,7 +5,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract BlootDerivative is ERC721Upgradeable {
+contract MyPFPland is ERC721Upgradeable {
     using CountersUpgradeable for CountersUpgradeable.Counter;
 
     CountersUpgradeable.Counter internal toyTokenIDs;
@@ -16,8 +16,12 @@ contract BlootDerivative is ERC721Upgradeable {
     uint256 internal paintingTokenIDBase;
     uint256 internal statuetteTokenIDBase;
 
-    address internal _owner;
+    address public _owner;
     bool public isOpenPayment;
+
+    bool public isPausedClaimingToy;
+    bool public isPausedClaimingPainting;
+    bool public isPausedClaimingStatteute;
 
     mapping(address => uint256) internal addressToClaimedToy;
     mapping(address => uint256) internal addressToClaimedPainting;
@@ -35,18 +39,24 @@ contract BlootDerivative is ERC721Upgradeable {
     }
 
     function initialize() initializer external {
-        __ERC721_init("BlootDerivative", "BlootDerivative");
+        __ERC721_init("MyPFPland", "MyPFPland");
         _owner = msg.sender;
 
         toyTokenIDBase = 0;
         paintingTokenIDBase = 300;
         statuetteTokenIDBase = 400;
-        blootNFT = ERC721(0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);
+        blootNFT = ERC721(0x72541Ad75E05BC77C7A92304225937a8F6653372);
     }
 
     function claim(uint256 _category, uint256 _count) external payable {
         require(_category >= 1, "out of range");
         require(_category <= 3, "out of range");
+        if (_category == 1)
+            require(isPausedClaimingToy == false, "toy claiming is paused");
+        if (_category == 2)
+            require(isPausedClaimingPainting == false, "painting claiming is paused");
+        if (_category == 3)
+            require(isPausedClaimingStatteute == false, "statteute claiming is paused");
         
         uint256 totalDerivative = getTotalDerivative(msg.sender, _category);
         if (_category == 1)
@@ -54,15 +64,13 @@ contract BlootDerivative is ERC721Upgradeable {
         else if (_category == 2)
             totalDerivative += addressToMigratedHonorary[msg.sender];
 
-        require(totalDerivative >= _count, "claim count mismatch");
-
         uint256 tokenID = 0;
         if (_category == 1)
-            require(totalDerivative >= addressToClaimedToy[msg.sender] + _count, "already claimed toy");
+            require(totalDerivative >= addressToClaimedToy[msg.sender] + _count, "already claimed all toys");
         else if (_category == 2)
-            require(totalDerivative >= addressToClaimedPainting[msg.sender] + _count, "already claimed painting");
+            require(totalDerivative >= addressToClaimedPainting[msg.sender] + _count, "already claimed all paintings");
         else if (_category == 3)
-            require(totalDerivative >= addressToClaimedStatteute[msg.sender] + _count, "already claimed statteute");
+            require(totalDerivative >= addressToClaimedStatteute[msg.sender] + _count, "already claimed all statteutes");
     
         for (uint8 i = 0; i < _count; i++) {
             if (_category == 1) {
@@ -87,9 +95,30 @@ contract BlootDerivative is ERC721Upgradeable {
             addressToClaimedStatteute[msg.sender] += _count;
     }
 
+    function getDerivativesToClaim(address _claimer, uint256 _category) public view returns(uint256) {
+        uint256 remain = 0;
+        if (_category < 1 || _category > 3)
+            return remain;
+        
+        uint256 totalDerivative = getTotalDerivative(_claimer, _category);
+        if (_category == 1) {
+            totalDerivative += addressToMigratedCameo[_claimer];
+            remain = totalDerivative - addressToClaimedToy[_claimer];
+        }
+        else if (_category == 2) {
+            totalDerivative += addressToMigratedHonorary[_claimer];
+            remain = totalDerivative - addressToClaimedPainting[_claimer];
+        }
+        else if (_category == 3) {
+            remain = totalDerivative - addressToClaimedStatteute[_claimer];
+        }
+
+        return remain;
+    }
+
     function getTotalDerivative(address _claimer, uint256 _category) internal view returns(uint256) {
         uint256 result = 0;
-        if (blootNFT.balanceOf(msg.sender) == 0)
+        if (blootNFT.balanceOf(_claimer) == 0)
             return result;
         uint256 tokenIdMin;
         uint256 tokenIdMax;
@@ -104,7 +133,7 @@ contract BlootDerivative is ERC721Upgradeable {
             tokenIdMax = 1484;
         }
 
-        for (uint256 i = 0; i < blootNFT.balanceOf(msg.sender); i++) {
+        for (uint256 i = 0; i < blootNFT.balanceOf(_claimer); i++) {
             uint256 tokenId = blootNFT.tokenOfOwnerByIndex(_claimer, i);
             if (tokenId >= tokenIdMin && tokenId <= tokenIdMax)
                 result ++;
@@ -112,40 +141,60 @@ contract BlootDerivative is ERC721Upgradeable {
         return result;
     }
 
-    function setBatchMigratedCameo(address[] calldata _whitelist, uint256 _count) external onlyOwner {
+    function setPauseClaimingToy(bool _pauseClaimingToy) external onlyOwner {
+        isPausedClaimingToy = _pauseClaimingToy;
+    }
+
+    function setPauseClaimingPainting(bool _pauseClaimingPainting) external onlyOwner {
+        isPausedClaimingPainting = _pauseClaimingPainting;
+    }
+
+    function setPauseClaimingStatteute(bool _pauseClaimingStatteute) external onlyOwner {
+        isPausedClaimingStatteute = _pauseClaimingStatteute;
+    }
+
+    function setBatchCameoWhitelist(address[] calldata _whitelist, uint256 _count) external onlyOwner {
         for (uint256 i = 0; i < _count; i++) {
             addressToMigratedCameo[_whitelist[i]] += 1;
         }
     }
 
-    function setBatchMigratedHonorary(address[] calldata _whitelist, uint256 _count) external onlyOwner {
+    function setBatchHonoraryWhitelist(address[] calldata _whitelist, uint256 _count) external onlyOwner {
         for (uint256 i = 0; i < _count; i++) {
             addressToMigratedHonorary[_whitelist[i]] += 1;
         }
-    }
-
-    function setMigratedCameo(address _person, uint256 _count) external onlyOwner {
-        addressToMigratedCameo[_person] += _count;
-    }
-
-    function setMigratedHonorary(address _person, uint256 _count) external onlyOwner {
-        addressToMigratedHonorary[_person] += _count;
     }
 
     function setBaseURI(string calldata _baseURI) external onlyOwner {
         super._setBaseURI(_baseURI);
     }
 
-    function setTokenURI(uint256 _tokenID, string calldata _tokenURI) external onlyOwner {
-        super._setTokenURI(_tokenID, _tokenURI);
+    function setTokenURI(uint256 _tokenID, uint256 _tokenURI) external onlyOwner {
+        super._setTokenURI(_tokenID, uint2str(_tokenURI));
+    }
+
+    function setTokenURIs(uint256[] calldata _tokenIDs, uint256[] calldata _tokenURIs, uint256 _count) external onlyOwner {
+        for (uint256 i = 0; i < _count; i++) {
+            super._setTokenURI(_tokenIDs[i], uint2str(_tokenURIs[i]));
+        }
     }
 
     function openPayment(bool _open) external onlyOwner {
         isOpenPayment = _open;
     }
 
+    function setBatchRoyalty(address[] calldata _people, uint256[] calldata _amount, uint256 _count) external onlyOwner {
+        for (uint256 i = 0; i < _count; i++) {
+            addressToRoyalty[_people[i]] = _amount[i];
+        }
+    }
+
     function setRoyalty(address _person, uint256 _amount) external onlyOwner {
         addressToRoyalty[_person] = _amount;
+    }
+
+    function royaltyOf(address _person) external view returns(uint256) {
+        return addressToRoyalty[_person];
     }
 
     function withdraw() external onlyOwner {
@@ -162,6 +211,11 @@ contract BlootDerivative is ERC721Upgradeable {
         (bool success, ) = msg.sender.call{value: addressToRoyalty[msg.sender]}("");
         require(success, "Failed to send eth");
         addressToRoyalty[msg.sender] = 0;
+    }
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _owner = newOwner;
     }
 
     function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
