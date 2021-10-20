@@ -25,7 +25,9 @@ contract MyPFPland is ERC721Upgradeable {
 
     mapping(address => uint256) internal addressToClaimedToy;
     mapping(address => uint256) internal addressToClaimedPainting;
-    mapping(address => uint256) internal addressToClaimedStatteute;
+    mapping(address => uint256) internal addressToClaimedStateutte;
+
+    mapping(uint256 => bool) public oldTokenIDUsed;
 
     mapping(address => uint256) internal addressToMigratedCameo;
     mapping(address => uint256) internal addressToMigratedHonorary;
@@ -70,7 +72,7 @@ contract MyPFPland is ERC721Upgradeable {
         else if (_category == 2)
             require(totalDerivative >= addressToClaimedPainting[msg.sender] + _count, "already claimed all paintings");
         else if (_category == 3)
-            require(totalDerivative >= addressToClaimedStatteute[msg.sender] + _count, "already claimed all statteutes");
+            require(totalDerivative >= _count, "already claimed all statteutes");
     
         for (uint8 i = 0; i < _count; i++) {
             if (_category == 1) {
@@ -91,11 +93,48 @@ contract MyPFPland is ERC721Upgradeable {
             addressToClaimedToy[msg.sender] += _count;
         else if (_category == 2)
             addressToClaimedPainting[msg.sender] += _count;
-        else if (_category == 3)
-            addressToClaimedStatteute[msg.sender] += _count;
+
+        // set oldTokenIDUsed true for those IDs already used
+        if (totalDerivative > 0 && _category == 3) {
+            for (uint8 i = 0; i < blootNFT.balanceOf(msg.sender); i++) {
+                uint256 tokenId = blootNFT.tokenOfOwnerByIndex(msg.sender, i);
+                if (tokenId <= 1484) {
+                    oldTokenIDUsed[tokenId] = true;
+                }
+            }
+        }
     }
 
-    function getDerivativesToClaim(address _claimer, uint256 _category) public view returns(uint256) {
+    function airdrop(address[] calldata _claimList, uint256[] calldata _tokenIDs, uint256 _count) external onlyOwner {
+        for (uint256 i = 0; i < _count; i++) {
+            uint256 tokenID = 0;
+            if (_tokenIDs[i] <= 300) {
+                toyTokenIDs.increment();
+                tokenID = toyTokenIDs.current() + toyTokenIDBase;
+
+                addressToClaimedToy[_claimList[i]] += 1;
+            } else if (_tokenIDs[i] <= 400) {
+                paintingTokenIDs.increment();
+                tokenID = paintingTokenIDs.current() + paintingTokenIDBase;
+
+                addressToClaimedPainting[_claimList[i]] += 1;
+            } else {
+                statuetteTokenIDs.increment();
+                tokenID = statuetteTokenIDs.current() + statuetteTokenIDBase;
+            }
+            _safeMint(_claimList[i], tokenID);
+            _setTokenURI(tokenID, uint2str(tokenID));
+            if (tokenID > 400) {
+                for (uint256 j = 0; j < blootNFT.balanceOf(_claimList[i]); j++) {
+                    uint256 tokenId = blootNFT.tokenOfOwnerByIndex(_claimList[i], j);
+                    if (tokenId <= 1484)
+                        oldTokenIDUsed[tokenId] = true;
+                }
+            }
+        }
+    }
+
+    function getDerivativesToClaim(address _claimer, uint256 _category) external view returns(uint256) {
         uint256 remain = 0;
         if (_category < 1 || _category > 3)
             return remain;
@@ -110,7 +149,7 @@ contract MyPFPland is ERC721Upgradeable {
             remain = totalDerivative - addressToClaimedPainting[_claimer];
         }
         else if (_category == 3) {
-            remain = totalDerivative - addressToClaimedStatteute[_claimer];
+            remain = totalDerivative;
         }
 
         return remain;
@@ -135,9 +174,16 @@ contract MyPFPland is ERC721Upgradeable {
 
         for (uint256 i = 0; i < blootNFT.balanceOf(_claimer); i++) {
             uint256 tokenId = blootNFT.tokenOfOwnerByIndex(_claimer, i);
-            if (tokenId >= tokenIdMin && tokenId <= tokenIdMax)
-                result ++;
+            if (tokenId >= tokenIdMin && tokenId <= tokenIdMax) {
+                if (_category == 3) {
+                    if (!oldTokenIDUsed[tokenId])
+                        result++;
+                }
+                else
+                    result++;
+            }
         }
+
         return result;
     }
 
