@@ -8,6 +8,11 @@ module.exports = {
       port: 8545,
       network_id: "*"
     },
+    mainnet: {
+      provider: () => new HDWalletProvider(process.env.MNEMONIC, "https://mainnet.infura.io/v3/" + process.env.INFURA_PROJECT_ID),
+      network_id: '1',
+      skipDryRun: true
+    },
     rinkeby: {
       provider: () => new HDWalletProvider(process.env.MNEMONIC, "https://rinkeby.infura.io/v3/" + process.env.INFURA_PROJECT_ID),
       network_id: '4',
@@ -22,6 +27,12 @@ module.exports = {
   compilers: {
     solc: {
       version: '0.6.5',
+      settings: {
+        optimizer: {
+          enabled: true,
+          runs: 1500
+        }
+      }
     },
   },
   api_keys: {
