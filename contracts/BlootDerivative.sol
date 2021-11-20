@@ -56,32 +56,24 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         uint256 tokenID;
     }
 
-    bool public allowMetadataForAllReserved;
+    string _contractURI;
+    bool allowMetadataForAllReserved;
     uint256 landWidth;
     uint256 landHeight;
     uint256 totalCollection;
-    uint256 constant clearLow = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000;
-    uint256 constant clearHigh = 0x00000000000000000000000000000000ffffffffffffffffffffffffffffffff;
-    uint256 constant factor = 0x100000000000000000000000000000000;
+    uint256 constant landTokenBase = 10000;
     address constant blootAddress = 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5;
     address constant metaKeyAddress = 0xbA8886bf3a6f0740e622AF240c54c9A6439DE0bE;
-    mapping(address => mapping(uint256 => uint256)) public claimedLandOf;
-    mapping(uint256 => address) public landOwnerOf;
-    mapping(address => uint256) public claimedLandBalanceOf;
-    mapping(address => uint256[]) internal landsOf;
+    mapping(address => mapping(uint256 => uint256)) claimedLandOf;
     mapping(uint256 => LandMetadata) public landRoyalMetadataOf;
     mapping(uint256 => LandDerivateMetadata[]) public landDerivativeMetadataOf;
     mapping(uint256 => uint256) public landDerivativeBalance;
-    mapping(uint256 => uint256) public landDerivativeCountOf;
-    mapping(uint256 => address) public collectionAddressByIndex;
+    mapping(uint256 => address) collectionAddressByIndex;
     mapping(address => uint256[]) public collectionIndicesByAddress;
-    mapping(uint256 => Rectangle) public collectionRectByIndex;
+    mapping(uint256 => Rectangle) internal collectionRectByIndex;
 
-    uint256 public totalLands;
-    mapping(uint256 => Point) public landByIndex;
-
-    mapping(address => uint256) internal honoraries;
-    mapping(address => uint256) internal mekakeyWallets;
+    mapping(address => uint256) honoraries;
+    mapping(address => uint256) mekakeyWallets;
 
     modifier onlyOwner() {
         require(_owner == msg.sender, "Ownable: caller is not the owner" );
@@ -99,18 +91,6 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         landWidth = 100;
         landHeight = 100;
         totalCollection = 0;
-
-        setCollectionRect(44, 44, 49, 49, 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);
-        setCollectionRect(50, 44, 55, 49, 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);
-        setCollectionRect(44, 50, 49, 55, 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);
-        setCollectionRect(50, 50, 55, 55, 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);        
-        setCollectionRect(23, 17, 24, 19, 0x12860d0293bEfa056568506ba9D78971b5B6fa18);
-        setCollectionRect(55, 48, 75, 51, 0x12860d0293bEfa056568506ba9D78971b5B6fa18);
-        setCollectionRect(10, 38, 14, 60, 0x12860d0293bEfa056568506ba9D78971b5B6fa18);
-        setCollectionRect(14, 48, 24, 51, 0x12860d0293bEfa056568506ba9D78971b5B6fa18);
-        setCollectionRect(90, 67, 100, 78, 0x12860d0293bEfa056568506ba9D78971b5B6fa18);
-        setCollectionRect(26, 75, 32, 80, 0x12860d0293bEfa056568506ba9D78971b5B6fa18);
-        setCollectionRect(24, 80, 34, 88, 0x12860d0293bEfa056568506ba9D78971b5B6fa18);
     }
 
     function claim(uint256 _category, uint256 _count) external payable {
@@ -274,6 +254,18 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         }
     }
 
+    function setBatchCameoBlacklist(address[] calldata _blacklist, uint256 _count) external onlyOwner {
+        for (uint256 i = 0; i < _count; i++) {
+            addressToMigratedCameo[_blacklist[i]] = 0;
+        }
+    }
+
+    function setBatchHonoraryBlacklist(address[] calldata _blacklist, uint256 _count) external onlyOwner {
+        for (uint256 i = 0; i < _count; i++) {
+            addressToMigratedHonorary[_blacklist[i]] = 0;
+        }
+    }
+
     // additional honoraries, will be supplimentary for addressToMigratedHonorary
     function setBatchHonoraries(address[] calldata _whitelist, uint256 _count) external onlyOwner {
         for (uint256 i = 0; i < _count; i++) {
@@ -284,6 +276,18 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     function setBatchMekakeyWallets(address[] calldata _whitelist, uint256 _count) external onlyOwner {
         for (uint256 i = 0; i < _count; i++) {
             mekakeyWallets[_whitelist[i]] += 1;
+        }
+    }
+
+    function clearBatchHonoraries(address[] calldata _blacklist, uint256 _count) external onlyOwner {
+        for (uint256 i = 0; i < _count; i++) {
+            honoraries[_blacklist[i]] = 0;
+        }
+    }
+
+    function clearBatchMekakeyWallets(address[] calldata _blacklist, uint256 _count) external onlyOwner {
+        for (uint256 i = 0; i < _count; i++) {
+            mekakeyWallets[_blacklist[i]] = 0;
         }
     }
 
@@ -341,10 +345,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     }
 
     function claimLand(uint256 x, uint256 y, uint256 collectionID) external payable {
-        require(msg.value == 25000000000000000, "invalid amount");
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
-        Rectangle memory area = collectionRectByIndex[collectionID];
-        require(x > area.leftBottom.x && y > area.leftBottom.y && x <= area.rightTop.x && y <= area.rightTop.y, "not contained");
+        require(x > collectionRectByIndex[collectionID].leftBottom.x && y > collectionRectByIndex[collectionID].leftBottom.y && x <= collectionRectByIndex[collectionID].rightTop.x && y <= collectionRectByIndex[collectionID].rightTop.y, "not contained");
 
         address collectionAddress = collectionAddressByIndex[collectionID];
         uint256 claimable;
@@ -354,11 +356,13 @@ contract MyPFPlandv2 is ERC721Upgradeable {
             if (collectionID == 0 || collectionID == 1 || collectionID == 2 || collectionID == 3) { // honorary collection ids
                 claimable = addressToMigratedHonorary[msg.sender] + honoraries[msg.sender];
             } else {
+                require(msg.value == 30000000000000000, "invalid amount"); //0.03 ETH
                 ERC721 collection = ERC721(collectionAddress);
                 claimable = collection.balanceOf(msg.sender);
                 claimable -= (addressToMigratedHonorary[msg.sender] + honoraries[msg.sender]);
             }
         } else {
+            require(msg.value == 30000000000000000, "invalid amount"); //0.03 ETH
             ERC721 collection = ERC721(collectionAddress);
             claimable = collection.balanceOf(msg.sender);
         }
@@ -366,10 +370,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         require(claimable > 0, "Don't own any NFT in this collection");
         require(claimedLandOf[msg.sender][collectionID] < claimable, "Already claimed all lands");
         uint256 assetID = _encodeTokenId(x, y);
-        require(landOwnerOf[assetID] == address(0x0), "This land is already claimed");
-        landOwnerOf[assetID] = msg.sender;
-        landsOf[msg.sender].push(assetID);
-        claimedLandBalanceOf[msg.sender] ++;
+        _safeMint(msg.sender, landTokenBase + assetID);
+        _setTokenURI(landTokenBase + assetID, uint2str(landTokenBase + assetID));
         if (collectionID == 0 || collectionID == 1 || collectionID == 2 || collectionID == 3) { // handle honorary exception
             for (uint256 i = 0; i < 4; i++) {
                 claimedLandOf[msg.sender][i] ++;
@@ -380,26 +382,34 @@ contract MyPFPlandv2 is ERC721Upgradeable {
                 claimedLandOf[msg.sender][collectionIndices[i]] ++;
             }
         }
-        Point memory land;
-        land.x = x;
-        land.y = y;
-        landByIndex[totalLands] = land;
-        totalLands ++;
     }
 
-    function getLandOfByIndex(address claimer, uint256 index) external view returns(uint256 x, uint256 y) {
-        uint256 assetID = landsOf[claimer][index];
-        (x, y) = _decodeTokenId(assetID);
-        return (x, y);
+    function landOwnerOf(uint256 tokenId) external view returns (address) {
+        ERC721 collection = ERC721(address(this));
+        try collection.ownerOf(tokenId) returns(address owner) {
+            return owner;
+        } catch Error(string memory /*reason*/) {
+            return address(0x0);
+        }
+    }
+
+    function _transfer(address /* from */, address /* to */, uint256 tokenId) internal override {
+        if (tokenId > landTokenBase) {
+            // remove its royal and derivative tokens
+            LandMetadata memory royalMetadata;
+            royalMetadata.collectionID = 0;
+            royalMetadata.tokenID = 0;
+            landRoyalMetadataOf[tokenId] = royalMetadata;
+            delete landDerivativeMetadataOf[tokenId];
+        }
     }
 
     function updateLandRoyalMetaData(uint256 x, uint256 y, uint256 collectionIDOfRoyalMetadata, uint256 tokenID) external {
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
         uint256 assetID = _encodeTokenId(x, y);
-        require(landOwnerOf[assetID] == msg.sender, "You are not the owner of this land");
+        require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
         if (!allowMetadataForAllReserved) {
-            Rectangle memory area = collectionRectByIndex[collectionIDOfRoyalMetadata];
-            require(x > area.leftBottom.x && y > area.leftBottom.y && x <= area.rightTop.x && y <= area.rightTop.y, "not contained");
+            require(x > collectionRectByIndex[collectionIDOfRoyalMetadata].leftBottom.x && y > collectionRectByIndex[collectionIDOfRoyalMetadata].leftBottom.y && x <= collectionRectByIndex[collectionIDOfRoyalMetadata].rightTop.x && y <= collectionRectByIndex[collectionIDOfRoyalMetadata].rightTop.y, "not contained");
         }
         address collectionAddress = collectionAddressByIndex[collectionIDOfRoyalMetadata];
         ERC721 collection = ERC721(collectionAddress);
@@ -407,22 +417,22 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         LandMetadata memory royalMetadata;
         royalMetadata.collectionID = collectionIDOfRoyalMetadata;
         royalMetadata.tokenID = tokenID;
-        landRoyalMetadataOf[assetID] = royalMetadata;
-        delete landDerivativeMetadataOf[assetID];
+        landRoyalMetadataOf[landTokenBase + assetID] = royalMetadata;
+        delete landDerivativeMetadataOf[landTokenBase + assetID];
     }
 
     function updateLandDerivativeMetaData(uint256 x, uint256 y, address collectionAddrsOfDerMetadata, uint256 tokenID) external {
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
         uint256 assetID = _encodeTokenId(x, y);
-        require(landOwnerOf[assetID] == msg.sender, "You are not the owner of this land");
-        require((landRoyalMetadataOf[assetID].collectionID != 0 || landRoyalMetadataOf[assetID].tokenID != 0), "Need to set royal NFT first");
+        require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
+        require((landRoyalMetadataOf[landTokenBase + assetID].collectionID != 0 || landRoyalMetadataOf[landTokenBase + assetID].tokenID != 0), "Need to set royal NFT first");
         ERC721 collection = ERC721(collectionAddrsOfDerMetadata);
         require(collection.ownerOf(tokenID) == msg.sender, "You are not the owner of this tokenID");
         LandDerivateMetadata memory derivativeMetadata;
         derivativeMetadata.collectionAddress = collectionAddrsOfDerMetadata;
         derivativeMetadata.tokenID = tokenID;
-        landDerivativeMetadataOf[assetID].push(derivativeMetadata);
-        landDerivativeBalance[assetID] ++;
+        landDerivativeMetadataOf[landTokenBase + assetID].push(derivativeMetadata);
+        landDerivativeBalance[landTokenBase + assetID] ++;
     }
 
     function setAllowMetadataForAllReserved(bool _allowMetadataForAllReserved) external onlyOwner {
@@ -439,16 +449,12 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         }
     }
 
-    function collectionIDAndClaimerAt(uint256 x, uint256 y) external view returns (uint256, address) {
+    function collectionIDAt(uint256 x, uint256 y) external view returns (uint256) {
         uint256 collectionID;
-        address claimer;
         if (x > landWidth || y > landHeight) {
             collectionID = 100000;
-            claimer = address(0x0);
-            return (collectionID, claimer);
+            return collectionID;
         }
-        uint256 assetID = _encodeTokenId(x, y);
-        claimer = landOwnerOf[assetID];
         Rectangle memory area;
         Point memory pt;
         pt.x = x;
@@ -457,11 +463,11 @@ contract MyPFPlandv2 is ERC721Upgradeable {
             area = collectionRectByIndex[i];
             if (isInsideCollectionRect(pt, area)) {
                 collectionID = i;
-                return (collectionID, claimer);
+                return collectionID;
             }
         }
         collectionID = 100000;
-        return (collectionID, claimer);
+        return collectionID;
     }
 
     function totalRoyalBalanceOf(address owner, uint256 collectionID) external view returns (uint256) {
@@ -546,20 +552,25 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         }
     }
 
-    function _encodeTokenId(uint256 x, uint256 y) public pure returns (uint256) {
-        return ((uint256(x) * factor) & clearLow) | (uint256(y) & clearHigh);
+    function _encodeTokenId(uint256 x, uint256 y) public view returns (uint256) {
+        return (x - 1) * landHeight + y;
     }
 
-    function _decodeTokenId(uint256 value) public pure returns (uint256 x, uint256 y) {
-        x = expandNegative128BitCast((value & clearLow) >> 128);
-        y = expandNegative128BitCast(value & clearHigh);
+    function _decodeTokenId(uint256 value) external view returns (uint256 x, uint256 y) {
+        x = value / landHeight + 1;
+        if (value % landHeight == 0)
+            x = x - 1;        
+        y = value - (x - 1) * landHeight;
     }
 
-    function expandNegative128BitCast(uint256 value) internal pure returns (uint256) {
-        if (value & ( 1 << 127) != 0) {
-            return uint256(value | clearLow);
-        }
-        return uint256(value);
+    // for opensea collection 
+    function setContractURI(string calldata _contractURI_) external onlyOwner() {
+        _contractURI = _contractURI_;
+    }
+
+    // for opensea collection 
+    function contractURI() external view returns (string memory) {
+        return _contractURI;
     }
 
     function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
