@@ -56,6 +56,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         uint256 tokenID;
     }
 
+    bool public isPausedClaimingLand;
     string _contractURI;
     bool allowMetadataForAllReserved;
     uint256 landWidth;
@@ -65,6 +66,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     address constant blootAddress = 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5;
     address constant metaKeyAddress = 0xbA8886bf3a6f0740e622AF240c54c9A6439DE0bE;
     mapping(address => mapping(uint256 => uint256)) claimedLandOf;
+    mapping(address => mapping(uint256 => bool)) usedRoyalToken;
     mapping(uint256 => LandMetadata) public landRoyalMetadataOf;
     mapping(uint256 => LandDerivateMetadata[]) public landDerivativeMetadataOf;
     mapping(uint256 => uint256) public landDerivativeBalance;
@@ -87,7 +89,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         toyTokenIDBase = 0;
         paintingTokenIDBase = 300;
         statuetteTokenIDBase = 400;
-        blootNFT = ERC721(0x72541Ad75E05BC77C7A92304225937a8F6653372);
+        blootNFT = ERC721(0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);
         landWidth = 100;
         landHeight = 100;
         totalCollection = 0;
@@ -344,8 +346,13 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         _owner = newOwner;
     }
 
+    function setPauseClaimingLand(bool _pauseClaimingLand) external onlyOwner {
+        isPausedClaimingLand = _pauseClaimingLand;
+    }
+
     function claimLand(uint256 x, uint256 y, uint256 collectionID) external payable {
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
+        require(isPausedClaimingLand == false, "land claiming is paused");
         require(x > collectionRectByIndex[collectionID].leftBottom.x && y > collectionRectByIndex[collectionID].leftBottom.y && x <= collectionRectByIndex[collectionID].rightTop.x && y <= collectionRectByIndex[collectionID].rightTop.y, "not contained");
 
         address collectionAddress = collectionAddressByIndex[collectionID];
@@ -356,7 +363,6 @@ contract MyPFPlandv2 is ERC721Upgradeable {
             if (collectionID == 0 || collectionID == 1 || collectionID == 2 || collectionID == 3) { // honorary collection ids
                 claimable = addressToMigratedHonorary[msg.sender] + honoraries[msg.sender];
             } else {
-                require(msg.value == 30000000000000000, "invalid amount"); //0.03 ETH
                 ERC721 collection = ERC721(collectionAddress);
                 claimable = collection.balanceOf(msg.sender);
                 claimable -= (addressToMigratedHonorary[msg.sender] + honoraries[msg.sender]);
@@ -399,6 +405,10 @@ contract MyPFPlandv2 is ERC721Upgradeable {
             LandMetadata memory royalMetadata;
             royalMetadata.collectionID = 0;
             royalMetadata.tokenID = 0;
+            // free original usedRoyalToken
+            uint256 originalCollectionID = landRoyalMetadataOf[tokenId].collectionID;
+            usedRoyalToken[collectionAddressByIndex[originalCollectionID]][landRoyalMetadataOf[tokenId].tokenID] = false;
+            
             landRoyalMetadataOf[tokenId] = royalMetadata;
             delete landDerivativeMetadataOf[tokenId];
         }
@@ -406,6 +416,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
 
     function updateLandRoyalMetaData(uint256 x, uint256 y, uint256 collectionIDOfRoyalMetadata, uint256 tokenID) external {
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
+        require(isPausedClaimingLand == false, "land claiming is paused");
         uint256 assetID = _encodeTokenId(x, y);
         require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
         if (!allowMetadataForAllReserved) {
@@ -414,6 +425,12 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         address collectionAddress = collectionAddressByIndex[collectionIDOfRoyalMetadata];
         ERC721 collection = ERC721(collectionAddress);
         require(collection.ownerOf(tokenID) == msg.sender, "You are not the owner of this tokenID");
+        require(usedRoyalToken[collectionAddress][tokenID] == false, "This royal NFT is already used");
+        // free original usedRoyalToken and set the new royalToken used as true
+        uint256 originalCollectionID = landRoyalMetadataOf[landTokenBase + assetID].collectionID;
+        usedRoyalToken[collectionAddressByIndex[originalCollectionID]][landRoyalMetadataOf[landTokenBase + assetID].tokenID] = false;
+        usedRoyalToken[collectionAddress][tokenID] = true;
+        //update royal metadata
         LandMetadata memory royalMetadata;
         royalMetadata.collectionID = collectionIDOfRoyalMetadata;
         royalMetadata.tokenID = tokenID;
@@ -423,6 +440,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
 
     function updateLandDerivativeMetaData(uint256 x, uint256 y, address collectionAddrsOfDerMetadata, uint256 tokenID) external {
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
+        require(isPausedClaimingLand == false, "land claiming is paused");
         uint256 assetID = _encodeTokenId(x, y);
         require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
         require((landRoyalMetadataOf[landTokenBase + assetID].collectionID != 0 || landRoyalMetadataOf[landTokenBase + assetID].tokenID != 0), "Need to set royal NFT first");
