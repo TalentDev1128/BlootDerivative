@@ -57,6 +57,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     }
 
     bool public isPausedClaimingLand;
+    bool public isPausedClaimingRoyal;
+    bool public isPausedClaimingDerivative;
     string _contractURI;
     bool allowMetadataForAllReserved;
     uint256 constant landWidth = 100;
@@ -70,9 +72,9 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     mapping(uint256 => LandMetadata) public landRoyalMetadataOf;
     mapping(uint256 => LandDerivateMetadata[]) public landDerivativeMetadataOf;
     mapping(uint256 => uint256) public landDerivativeBalance;
-    mapping(uint256 => address) collectionAddressByIndex;
+    mapping(uint256 => address) public collectionAddressByIndex;
     mapping(address => uint256[]) public collectionIndicesByAddress;
-    mapping(uint256 => Rectangle) internal collectionRectByIndex;
+    mapping(uint256 => Rectangle) public collectionRectByIndex;
     
     mapping(address => uint256) mekakeyWallets;
 
@@ -141,35 +143,6 @@ contract MyPFPlandv2 is ERC721Upgradeable {
                 uint256 tokenId = blootNFT.tokenOfOwnerByIndex(msg.sender, i);
                 if (tokenId <= 1484) {
                     oldTokenIDUsed[tokenId] = true;
-                }
-            }
-        }
-    }
-
-    function airdrop(address[] calldata _claimList, uint256[] calldata _tokenIDs, uint256 _count) external onlyOwner {
-        for (uint256 i = 0; i < _count; i++) {
-            uint256 tokenID = 0;
-            if (_tokenIDs[i] <= 300) {
-                toyTokenIDs.increment();
-                tokenID = toyTokenIDs.current() + toyTokenIDBase;
-
-                addressToClaimedToy[_claimList[i]] += 1;
-            } else if (_tokenIDs[i] <= 400) {
-                paintingTokenIDs.increment();
-                tokenID = paintingTokenIDs.current() + paintingTokenIDBase;
-
-                addressToClaimedPainting[_claimList[i]] += 1;
-            } else {
-                statuetteTokenIDs.increment();
-                tokenID = statuetteTokenIDs.current() + statuetteTokenIDBase;
-            }
-            _safeMint(_claimList[i], tokenID);
-            _setTokenURI(tokenID, uint2str(tokenID));
-            if (tokenID > 400) {
-                for (uint256 j = 0; j < blootNFT.balanceOf(_claimList[i]); j++) {
-                    uint256 tokenId = blootNFT.tokenOfOwnerByIndex(_claimList[i], j);
-                    if (tokenId <= 1484)
-                        oldTokenIDUsed[tokenId] = true;
                 }
             }
         }
@@ -264,13 +237,13 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         }
     }
 
-    function setBatchMekakeyWallets(address[] calldata _whitelist, uint256 _count) external onlyOwner {
+    function setBatchMekakeyWhitelist(address[] calldata _whitelist, uint256 _count) external onlyOwner {
         for (uint256 i = 0; i < _count; i++) {
             mekakeyWallets[_whitelist[i]] += 1;
         }
     }
 
-    function clearBatchMekakeyWallets(address[] calldata _blacklist, uint256 _count) external onlyOwner {
+    function setBatchMekakeyBlacklist(address[] calldata _blacklist, uint256 _count) external onlyOwner {
         for (uint256 i = 0; i < _count; i++) {
             mekakeyWallets[_blacklist[i]] = 0;
         }
@@ -321,6 +294,14 @@ contract MyPFPlandv2 is ERC721Upgradeable {
 
     function setPauseClaimingLand(bool _pauseClaimingLand) external onlyOwner {
         isPausedClaimingLand = _pauseClaimingLand;
+    }
+
+    function setPauseClaimingRoyal(bool _isPausedClaimingRoyal) external onlyOwner {
+        isPausedClaimingRoyal = _isPausedClaimingRoyal;
+    }
+
+    function setPauseClaimingDerivative(bool _isPausedClaimingDerivative) external onlyOwner {
+        isPausedClaimingDerivative = _isPausedClaimingDerivative;
     }
 
     function claimLand(uint256 x, uint256 y, uint256 collectionID) external payable {
@@ -392,7 +373,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
 
     function updateLandRoyalMetaData(uint256 x, uint256 y, uint256 collectionIDOfRoyalMetadata, uint256 tokenID) external {
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
-        require(isPausedClaimingLand == false, "land claiming is paused");
+        require(isPausedClaimingRoyal == false, "royal claiming is paused");
         uint256 assetID = _encodeTokenId(x, y);
         require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
         if (!allowMetadataForAllReserved) {
@@ -418,7 +399,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
 
     function updateLandDerivativeMetaData(uint256 x, uint256 y, address collectionAddrsOfDerMetadata, uint256 tokenID) external {
         require(x <= landWidth && y <= landHeight, "exceeds boundary");
-        require(isPausedClaimingLand == false, "land claiming is paused");
+        require(isPausedClaimingDerivative == false, "derivative claiming is paused");
         uint256 assetID = _encodeTokenId(x, y);
         require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
         require((landRoyalMetadataOf[landTokenBase + assetID].collectionID != 0 || landRoyalMetadataOf[landTokenBase + assetID].tokenID != 0), "Need to set royal NFT first");
@@ -517,20 +498,6 @@ contract MyPFPlandv2 is ERC721Upgradeable {
             return false;
     }
 
-    function setCollectionRect(uint256 leftBottomX, uint256 leftBottomY, uint256 rightTopX, uint256 rightTopY, address collectionAddress) public onlyOwner {
-        Rectangle memory area;
-        area.leftBottom.x = leftBottomX;
-        area.leftBottom.y = leftBottomY;
-
-        area.rightTop.x = rightTopX;
-        area.rightTop.y = rightTopY;
-        collectionRectByIndex[totalCollection] = area;
-        collectionAddressByIndex[totalCollection] = collectionAddress;
-        if (totalCollection != 0 && totalCollection != 1 && totalCollection != 2 && totalCollection != 3)
-            collectionIndicesByAddress[collectionAddress].push(totalCollection);
-        totalCollection ++;
-    }
-
     function setBatchCollectionRect(uint256[] calldata leftBottomX, uint256[] calldata leftBottomY, uint256[] calldata rightTopX, uint256[] calldata rightTopY, address[] calldata collectionAddress, uint256 count) external onlyOwner {
         Rectangle memory area;
         for (uint256 i = 0; i < count; i++) {
@@ -543,6 +510,14 @@ contract MyPFPlandv2 is ERC721Upgradeable {
             collectionAddressByIndex[totalCollection] = collectionAddress[i];
             collectionIndicesByAddress[collectionAddress[i]].push(totalCollection);
             totalCollection ++;
+        }
+    }
+
+    function resetBatchCollectionRect(uint256[] calldata indices, address[] calldata collectionAddress, uint256 count) external onlyOwner {
+        for (uint256 i = 0; i < count; i++) {
+            delete collectionIndicesByAddress[collectionAddressByIndex[indices[i]]];
+            collectionAddressByIndex[indices[i]] = collectionAddress[i];
+            collectionIndicesByAddress[collectionAddress[i]].push(indices[i]);
         }
     }
 
