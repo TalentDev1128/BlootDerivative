@@ -6,7 +6,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract MyPFPlandv2 is ERC721Upgradeable {
+contract MyPFPlandv3 is ERC721Upgradeable {
     using CountersUpgradeable for CountersUpgradeable.Counter;
 
     CountersUpgradeable.Counter internal toyTokenIDs;
@@ -66,7 +66,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     uint256 totalCollection;
     uint256 constant landTokenBase = 10000;
     address constant blootAddress = 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5;
-    address constant metaKeyAddress = 0xbA8886bf3a6f0740e622AF240c54c9A6439DE0bE;
+    address constant metaKeyAddress = 0x10DaA9f4c0F985430fdE4959adB2c791ef2CCF83;
     mapping(address => mapping(uint256 => uint256)) claimedLandOf;
     mapping(address => mapping(uint256 => bool)) usedRoyalToken;
     mapping(uint256 => LandMetadata) public landRoyalMetadataOf;
@@ -90,7 +90,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         toyTokenIDBase = 0;
         paintingTokenIDBase = 300;
         statuetteTokenIDBase = 400;
-        blootNFT = ERC721(0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);
+        blootNFT = ERC721(0x72541Ad75E05BC77C7A92304225937a8F6653372);
     }
 
     function claim(uint256 _category, uint256 _count) external payable {
@@ -253,38 +253,9 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         super._setBaseURI(_baseURI);
     }
 
-    function openPayment(bool _open) external onlyOwner {
-        isOpenPayment = _open;
-    }
-
-    function setBatchRoyalty(address[] calldata _people, uint256[] calldata _amount, uint256 _count) external onlyOwner {
-        for (uint256 i = 0; i < _count; i++) {
-            addressToRoyalty[_people[i]] = _amount[i];
-        }
-    }
-
-    function setRoyalty(address _person, uint256 _amount) external onlyOwner {
-        addressToRoyalty[_person] = _amount;
-    }
-
-    function royaltyOf(address _person) external view returns(uint256) {
-        return addressToRoyalty[_person];
-    }
-
     function withdraw() external onlyOwner {
         (bool success, ) = _owner.call{value: address(this).balance}("");
         require(success, "Failed to send");
-    }
-
-    function withdrawRoyalty() external {
-        require(isOpenPayment == true, "Payment is closed");
-        require(addressToRoyalty[msg.sender] > 0, "You don't have any royalties");
-        require(address(this).balance >= addressToRoyalty[msg.sender], "Insufficient balance in the contract");
-        require(msg.sender != address(0x0), "invalid caller");
-
-        (bool success, ) = msg.sender.call{value: addressToRoyalty[msg.sender]}("");
-        require(success, "Failed to send eth");
-        addressToRoyalty[msg.sender] = 0;
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
@@ -305,16 +276,15 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     }
 
     function claimLand(uint256 x, uint256 y, uint256 collectionID) external payable {
-        require(x <= landWidth && y <= landHeight, "exceeds boundary");
         require(isPausedClaimingLand == false, "land claiming is paused");
         require(x > collectionRectByIndex[collectionID].leftBottom.x && y > collectionRectByIndex[collectionID].leftBottom.y && x <= collectionRectByIndex[collectionID].rightTop.x && y <= collectionRectByIndex[collectionID].rightTop.y, "not contained");
 
         address collectionAddress = collectionAddressByIndex[collectionID];
         uint256 claimable;
-        if (collectionAddress == metaKeyAddress) {
+        if (collectionID >= 4 && collectionID <= 6) {
             claimable = mekakeyWallets[msg.sender];
         } else if (collectionAddress == blootAddress) {
-            if (collectionID == 0 || collectionID == 1 || collectionID == 2 || collectionID == 3) { // honorary collection ids
+            if (collectionID >= 0 && collectionID <= 3) { // honorary collection ids
                 claimable = addressToMigratedHonorary[msg.sender];
             } else {
                 ERC721 collection = ERC721(collectionAddress);
@@ -372,14 +342,14 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     }
 
     function updateLandRoyalMetaData(uint256 x, uint256 y, uint256 collectionIDOfRoyalMetadata, uint256 tokenID) external {
-        require(x <= landWidth && y <= landHeight, "exceeds boundary");
         require(isPausedClaimingRoyal == false, "royal claiming is paused");
         uint256 assetID = _encodeTokenId(x, y);
         require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
-        if (!allowMetadataForAllReserved) {
+        if (!allowMetadataForAllReserved && addressToMigratedHonorary[msg.sender] == 0 && mekakeyWallets[msg.sender] == 0) {
             require(x > collectionRectByIndex[collectionIDOfRoyalMetadata].leftBottom.x && y > collectionRectByIndex[collectionIDOfRoyalMetadata].leftBottom.y && x <= collectionRectByIndex[collectionIDOfRoyalMetadata].rightTop.x && y <= collectionRectByIndex[collectionIDOfRoyalMetadata].rightTop.y, "not contained");
         }
         address collectionAddress = collectionAddressByIndex[collectionIDOfRoyalMetadata];
+        require(collectionIDOfRoyalMetadata >= 7, "Invalid collection id, honorary or metakey");
         ERC721 collection = ERC721(collectionAddress);
         require(collection.ownerOf(tokenID) == msg.sender, "You are not the owner of this tokenID");
         require(usedRoyalToken[collectionAddress][tokenID] == false, "This royal NFT is already used");
@@ -398,7 +368,6 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     }
 
     function updateLandDerivativeMetaData(uint256 x, uint256 y, address collectionAddrsOfDerMetadata, uint256 tokenID) external {
-        require(x <= landWidth && y <= landHeight, "exceeds boundary");
         require(isPausedClaimingDerivative == false, "derivative claiming is paused");
         uint256 assetID = _encodeTokenId(x, y);
         require(super.ownerOf(landTokenBase + assetID) == msg.sender, "You are not the owner of this land");
@@ -418,6 +387,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
 
     function getLandMetaData(uint256 collectionID, uint256 tokenID) external view returns(string memory) {
         address collectionAddress = collectionAddressByIndex[collectionID];
+        if (collectionID < 7)
+            return "";
         ERC721 collection = ERC721(collectionAddress);
         try collection.tokenURI(tokenID) returns(string memory tokenURI) {
             return tokenURI;
@@ -428,9 +399,6 @@ contract MyPFPlandv2 is ERC721Upgradeable {
 
     function collectionIDAt(uint256 x, uint256 y) external view returns (uint256) {
         uint256 collectionID;
-        if (x > landWidth || y > landHeight) {
-            return 100000;
-        }
         Rectangle memory area;
         Point memory pt;
         pt.x = x;
@@ -446,11 +414,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     }
 
     function totalRoyalBalanceOf(address owner, uint256 collectionID) external view returns (uint256) {
-        if (!allowMetadataForAllReserved) {
-            address collectionAddress = collectionAddressByIndex[collectionID];
-            ERC721 collection = ERC721(collectionAddress);
-            return collection.balanceOf(owner);
-        } else {
+        if (allowMetadataForAllReserved || (collectionID < 7 && (addressToMigratedHonorary[owner] > 0 || mekakeyWallets[owner] > 0))) {
             uint256 totalBalance = 0;
             address lastAddress;
             for (uint256 i = 0; i < totalCollection; i++) {
@@ -458,21 +422,22 @@ contract MyPFPlandv2 is ERC721Upgradeable {
                 if (collectionAddress == lastAddress)
                     continue;
                 lastAddress = collectionAddress;
+                if (i < 7) // honorary and metakey
+                    continue;
                 ERC721 collection = ERC721(collectionAddress);
                 totalBalance += collection.balanceOf(owner);
             }
             return totalBalance;
+        } else {
+            address collectionAddress = collectionAddressByIndex[collectionID];
+            ERC721 collection = ERC721(collectionAddress);
+            return collection.balanceOf(owner);
         }
     }
 
     function royalTokenOfOwnerByIndex(address owner, uint256 index, uint256 collectionID) external view returns (uint256, uint256) {
         uint256 tokenID;
-        if (!allowMetadataForAllReserved) {
-            address collectionAddress = collectionAddressByIndex[collectionID];
-            ERC721 collection = ERC721(collectionAddress);
-            tokenID = collection.tokenOfOwnerByIndex(owner, index);
-            return (collectionID, tokenID);
-        } else {
+        if (allowMetadataForAllReserved || (collectionID < 7 && (addressToMigratedHonorary[owner] > 0 || mekakeyWallets[owner] > 0))) {
             uint256 totalBalance = 0;
             address lastAddress;
             for (uint256 i = 0; i < totalCollection; i++) {
@@ -480,6 +445,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
                 if (collectionAddress == lastAddress)
                     continue;
                 lastAddress = collectionAddress;
+                if (i < 7)
+                    continue;
                 ERC721 collection = ERC721(collectionAddress);
                 totalBalance += collection.balanceOf(owner);
                 if (totalBalance - 1 < index)
@@ -488,6 +455,11 @@ contract MyPFPlandv2 is ERC721Upgradeable {
                 tokenID = collection.tokenOfOwnerByIndex(owner, tokenIndex);
                 return (i, tokenID);
             }
+        } else {
+            address collectionAddress = collectionAddressByIndex[collectionID];
+            ERC721 collection = ERC721(collectionAddress);
+            tokenID = collection.tokenOfOwnerByIndex(owner, index);
+            return (collectionID, tokenID);
         }
     }
 
@@ -508,7 +480,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
             area.rightTop.y = rightTopY[i];
             collectionRectByIndex[totalCollection] = area;
             collectionAddressByIndex[totalCollection] = collectionAddress[i];
-            collectionIndicesByAddress[collectionAddress[i]].push(totalCollection);
+            if (totalCollection != 0 && totalCollection != 1 && totalCollection != 2 && totalCollection != 3)
+                collectionIndicesByAddress[collectionAddress[i]].push(totalCollection);
             totalCollection ++;
         }
     }
