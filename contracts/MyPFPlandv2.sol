@@ -59,8 +59,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     bool public isPausedClaimingLand;
     bool public isPausedClaimingRoyal;
     bool public isPausedClaimingDerivative;
-    string _contractURI;
-    bool allowMetadataForAllReserved;
+    string public _contractURI;
+    bool public allowMetadataForAllReserved;
     uint256 constant landWidth = 100;
     uint256 constant landHeight = 100;
     uint256 totalCollection;
