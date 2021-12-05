@@ -65,7 +65,7 @@ contract MyPFPlandv3 is ERC721Upgradeable {
     uint256 constant landHeight = 100;
     uint256 totalCollection;
     uint256 constant landTokenBase = 10000;
-    address constant blootAddress = 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5;
+    address constant blootAddress = 0x72541Ad75E05BC77C7A92304225937a8F6653372;
     address constant metaKeyAddress = 0x10DaA9f4c0F985430fdE4959adB2c791ef2CCF83;
     mapping(address => mapping(uint256 => uint256)) claimedLandOf;
     mapping(address => mapping(uint256 => bool)) usedRoyalToken;

@@ -1,3 +1,6 @@
+.env
+.openzeppelin
 package-lock.json
 node_modules/
 build/
+contracts_flatten/

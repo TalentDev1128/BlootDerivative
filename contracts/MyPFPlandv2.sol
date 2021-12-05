@@ -65,8 +65,8 @@ contract MyPFPlandv2 is ERC721Upgradeable {
     uint256 constant landHeight = 100;
     uint256 totalCollection;
     uint256 constant landTokenBase = 10000;
-    address constant blootAddress = 0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5;
-    address constant metaKeyAddress = 0xbA8886bf3a6f0740e622AF240c54c9A6439DE0bE;
+    address constant blootAddress = 0x72541Ad75E05BC77C7A92304225937a8F6653372;
+    address constant metaKeyAddress = 0x10DaA9f4c0F985430fdE4959adB2c791ef2CCF83;
     mapping(address => mapping(uint256 => uint256)) claimedLandOf;
     mapping(address => mapping(uint256 => bool)) usedRoyalToken;
     mapping(uint256 => LandMetadata) public landRoyalMetadataOf;
@@ -90,7 +90,7 @@ contract MyPFPlandv2 is ERC721Upgradeable {
         toyTokenIDBase = 0;
         paintingTokenIDBase = 300;
         statuetteTokenIDBase = 400;
-        blootNFT = ERC721(0xCAccb157236B0969fe21eb486f2Bc5dc0662a5c5);
+        blootNFT = ERC721(0x72541Ad75E05BC77C7A92304225937a8F6653372);
     }
 
     function claim(uint256 _category, uint256 _count) external payable {
